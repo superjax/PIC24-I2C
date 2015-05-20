@@ -4,4 +4,4 @@ I2C Driver written for the purpose of the BYU ME 495R Mechatronics Class by [gel
 
 This repo is a stripped-down version of the code.  The full code and hardware schematics can be found [here](https://github.com/TeamBaymax), where this is meant to be a repo of the I2C driver and helper functions to drive the IR cameras.
 
-Documentation can be found on this repo's [wiki]() (see right column of page)
+Documentation can be found on this repo's [wiki](https://github.com/superjax/PIC24-I2C/wiki) (see right column of page)
