@@ -1,8 +1,54 @@
-/*
- * File:   vision.h
- * Author: James
+/**
+ * \file vision.h
  *
- * Created on March 20, 2015, 6:03 PM
+ * \ingroup PIC24-I2C Driver
+ *
+ * \brief Vision Library for PIC24.  Uses two DFRobot IR Position Sensors connected over
+ * i2c to determine the position of an IR beacon with respect to the robot.
+ *
+ * \note See the wiki for information regarding the derivation of the 
+ * stereo vision and mono vision methods
+ *
+ * \author $Author: superjax $
+ *
+ * \version $Revision: 1.0 $
+ *
+ * \date $Date: 04/26/2015 14:16:20 $
+ *
+ * Contact: superjax08@gmail.com
+ *
+ * Created on: Mar 25, 2015
+ *
+ * \license
+ *
+ * Copyright (c) 2015, James Jackson, Gary Ellingson, Emily Lazglade, Nolan Crook
+ *
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without modification, 
+ * are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this 
+ * list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this 
+ * list of conditions and the following disclaimer in the documentation and/or other 
+ * materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its contributors may 
+ * be used to endorse or promote products derived from this software without specific 
+ * prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR 
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 
@@ -23,11 +69,11 @@
 #define Y1_OFFSET 512
 #define Y2_OFFSET 512
 
-#define PHI1 0.0794
-#define PHI2 0.0794
-#define D 5
 
-#define DEBUG 1
+// These are physical constants that came from measuring the robot
+#define PHI1 0.0794 // angle of the camera with respect to the centerline of the robot (radians)
+#define PHI2 0.0794
+#define D 5 // distance between the two cameras (assumed to be symmetrically placed about the centerline in inches
 
 
 char beacon; // indicator of whether or not we see the beacon
@@ -39,15 +85,16 @@ volatile float theta_window = 3.0*PI/180.0; // error allowed when aligning theta
 char timeToReadVision;
 
 typedef enum{
-    neither_cam = 0, // beginning of game, locating garage and orienting self
-    one_cam = 1,  // getting new balls
-    two_cams = 2,  // finding goals and shooting
-    error = 255, //both cameras are not working
+    neither_cam = 0, // unable to see beacon with either camera
+    one_cam = 1,  // can see with one camera - use caution when in this state
+    two_cams = 2,  // can see with both.  Good measurements
+    error = 255, // error with the cameras (either improperly initialized or returning bogus values)
 } VisionFlag;
 
 /**
- * Interupt for throtling the use of the I2C bus to read the IR cammeras. The
- * see_beacon() shoulc only be called when timeToReadVision is true.
+ * Interupt for throttling the use of the I2C bus to read the IR cameras. The
+ * see_beacon() should only be called when timeToReadVision is true.
+ * If the I2C runs at full speed, it will slow down the robot
  */
 void _ISR _T1Interrupt(void)
 {
@@ -58,7 +105,7 @@ void _ISR _T1Interrupt(void)
 /**
  * vision_setup a function that initializes the i2c communication with the ir
  * cameras and sends the appropriate configuration to them.  This must be run
- * before see_beaon() will work
+ * before see_beacon() will work
  */
 void vision_setup()
 {
@@ -76,7 +123,7 @@ void vision_setup()
     T1CONbits.TON = 1;
     T1CONbits.TCS = 0;
     T1CONbits.TCKPS = 0b10;
-    PR1 = 10000; // period to read I2C
+    PR1 = 10000; // period to read I2C - This could probably be chosen more intelligently
     TMR1 = 0;
     _T1IE = 1;
     _T1IF = 0;
@@ -120,6 +167,16 @@ VisionFlag see_beacon(float* thetaptr, float* rptr)
     }
 }
 
+/**
+ * stereo_vision a function which calculates the bearing (theta) and distance (r)
+ * to the beacon from the centerline of the robot.  Theta is measured in radians to the 
+ * right of the centerline and r is measured in the same units as the baseline of the two
+ * cameras. (in this case, inches)
+ * @see vision_setup()
+ * @param theta a pointer to the returned bearing measurement (radians).
+ * @param r a pointer to the returned distance measurement (inches)
+ * @return 0 if unable to see.  1 if using only one camera, 2 if using both, 255 if in error
+ */
 void stereo_vision(int x1, int x2, float* theta, float* r)
 {
       // linearly interpolate gamma1 and gamma2
@@ -142,6 +199,19 @@ void stereo_vision(int x1, int x2, float* theta, float* r)
       }
 }
 
+/**
+ * mono_vision a function which calculates the bearing (theta) and distance (r)
+ * to the beacon from the centerline of the robot.  Theta is measured in radians to the 
+ * right of the centerline and r is measured in the same units as the baseline of the two
+ * cameras. (in this case, inches)  This assumes that only one of the cameras is able to see the
+ * beacon, and uses the y measurement to determine range and angle.  This method is not as
+ * accurate as the stereo_vision method, due to the limited resolution of the sensors in the
+ * y direction.
+ * @see vision_setup()
+ * @param theta a pointer to the returned bearing measurement (radians).
+ * @param r a pointer to the returned distance measurement (inches)
+ * @return 0 if unable to see.  1 if using only one camera, 2 if using both, 255 if in error
+ */
 void mono_vision(float x1, float y1,float x2, float y2, float* theta, float* r)
 {
    float beta, x, y;
