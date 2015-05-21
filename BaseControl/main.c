@@ -6,7 +6,7 @@
  * \brief a quick sketch to demonstrate how the infrared sensors can be used
  * to calculate range and bearing to an IR beacon
  *
- * \author $Author: gellings and superjax $
+ * \author $Author: gellings, emros and superjax $
  *
  * \version $Revision: 1.0 $
  *
